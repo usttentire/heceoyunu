@@ -1,0 +1,1022 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>İnteraktif Hece Slaytı ve Dinamik Hece Üretici</title>
+  <!-- Google Fonts: İlkokul okuma eğitimine uygun fontlar -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@700;800;900&display=swap" rel="stylesheet">
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            display: ['Fredoka', 'sans-serif'],
+            body: ['Nunito', 'sans-serif']
+          },
+          colors: {
+            brand: {
+              teal: '#0d9488',
+              orange: '#f97316',
+              amber: '#f59e0b',
+              purple: '#8b5cf6'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    .hece-text {
+      font-size: clamp(4.5rem, 20vw, 18rem);
+      line-height: 1;
+      text-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    
+    .pop-in {
+      animation: popIn 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+    @keyframes popIn {
+      0% {
+        transform: scale(0.88);
+        opacity: 0;
+      }
+      100% {
+        transform: scale(1);
+        opacity: 1;
+      }
+    }
+
+    /* Temalar */
+    .theme-pastel {
+      background: radial-gradient(circle at 50% 30%, #fefce8, #fef08a 35%, #fde047 100%);
+      color: #1e293b;
+    }
+    .theme-sky {
+      background: radial-gradient(circle at 50% 30%, #f0fdfa, #ccfbf1 40%, #99f6e4 100%);
+      color: #0f172a;
+    }
+    .theme-chalkboard {
+      background: radial-gradient(circle at 50% 30%, #1e3a2b, #12281d 75%, #0b1a13 100%);
+      color: #f8fafc;
+    }
+    .theme-night {
+      background: radial-gradient(circle at 50% 30%, #1e1b4b, #0f172a 80%);
+      color: #fef08a;
+    }
+
+    .backdrop-blur-custom {
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+    }
+
+    /* Özel kaydırma çubuğu */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(0,0,0,0.2);
+      border-radius: 999px;
+    }
+  </style>
+</head>
+<body class="theme-pastel min-h-screen w-full flex flex-col justify-between overflow-hidden select-none transition-colors duration-500 font-body relative">
+
+  <!-- Üst Araç Çubuğu -->
+  <header class="w-full px-4 sm:px-8 py-3 sm:py-4 flex items-center justify-between z-20">
+    <!-- Sol: Hece Sayacı ve Rozetler -->
+    <div class="flex items-center space-x-2 sm:space-x-3">
+      <div class="bg-white/80 dark:bg-black/40 shadow-sm border border-black/10 px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-2xl flex items-center gap-2">
+        <span class="text-xs sm:text-sm font-black uppercase tracking-wider text-slate-500">Hece</span>
+        <span id="counterText" class="text-base sm:text-lg font-black text-indigo-600">1 / 1</span>
+      </div>
+
+      <!-- Otomatik Oynatma Durum Rozeti -->
+      <div id="autoplayBadge" class="hidden items-center gap-1.5 bg-emerald-500 text-white text-xs sm:text-sm font-bold px-3 py-1.5 rounded-xl shadow-sm animate-pulse">
+        <span class="w-2 h-2 rounded-full bg-white"></span>
+        <span id="autoplaySpeedLabel">2sn Oto</span>
+      </div>
+    </div>
+
+    <!-- Sağ: Butonlar (Hece Üretici, Düzenle, Tema, Oynat, Tam Ekran) -->
+    <div class="flex items-center space-x-1.5 sm:space-x-2.5">
+      <!-- Dinamik Hece Üretici Butonu -->
+      <button id="openGeneratorBtn" title="Harf Seçerek Hece Üret" class="px-3 sm:px-4 py-2 sm:py-2.5 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white active:scale-95 shadow-md transition font-black text-xs sm:text-sm flex items-center gap-1.5">
+        <span class="text-base">🔤</span>
+        <span>Hece Üretici</span>
+      </button>
+
+      <!-- Hece Havuzu Düzenle -->
+      <button id="openModalBtn" title="Hece Havuzunu Düzenle" class="px-3 sm:px-4 py-2 sm:py-2.5 rounded-2xl bg-white/80 hover:bg-white active:scale-95 shadow-sm border border-black/10 transition text-slate-700 hover:text-indigo-600 font-bold text-xs sm:text-sm flex items-center gap-1.5">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+        </svg>
+        <span class="hidden md:inline">Heceleri Düzenle</span>
+      </button>
+
+      <!-- Tema Değiştirici -->
+      <button id="themeToggleBtn" title="Temayı Değiştir" class="p-2 sm:p-2.5 rounded-2xl bg-white/80 hover:bg-white active:scale-95 shadow-sm border border-black/10 transition text-slate-700 hover:text-indigo-600">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M7 21a4 4 0 01-4-4 4 4 0 014-4c2 0 4 2 4 4a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
+        </svg>
+      </button>
+
+      <!-- Otomatik Oynatma Butonu -->
+      <button id="autoplayBtn" title="Otomatik Geçiş" class="p-2 sm:p-2.5 rounded-2xl bg-white/80 hover:bg-white active:scale-95 shadow-sm border border-black/10 transition text-slate-700 hover:text-emerald-600">
+        <svg id="playIcon" xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+          <path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <svg id="pauseIcon" xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 hidden text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      </button>
+
+      <!-- Tam Ekran Butonu -->
+      <button id="fullscreenBtn" title="Tam Ekran" class="p-2 sm:p-2.5 rounded-2xl bg-white/80 hover:bg-white active:scale-95 shadow-sm border border-black/10 transition text-slate-700 hover:text-indigo-600">
+        <svg id="enterFullscreenIcon" xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+        </svg>
+        <svg id="exitFullscreenIcon" xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- Ana Hece Alanı (Ekranın Tam Ortası) -->
+  <main id="slideArea" class="flex-1 flex flex-col items-center justify-center p-4 cursor-pointer relative" title="Sıradaki heceye geçmek için tıklayın">
+    <!-- Bildirim Rozeti (Toast) -->
+    <div id="toastMessage" class="absolute top-4 opacity-0 pointer-events-none transition-all duration-300 transform -translate-y-2 bg-indigo-600 text-white font-black px-6 py-2.5 rounded-full shadow-xl text-sm sm:text-base z-30 flex items-center gap-2">
+      <span id="toastText">Sıralama Karıştırıldı! 🎲</span>
+    </div>
+
+    <!-- Dev Hece Metni -->
+    <div class="relative flex items-center justify-center w-full max-w-5xl">
+      <div id="heceCard" class="hece-text font-display font-black tracking-normal text-center drop-shadow-md select-none transform transition-transform duration-150">
+        an
+      </div>
+    </div>
+
+    <p class="mt-4 text-xs sm:text-sm font-bold opacity-60 tracking-wide text-center">
+      İlerlemek için ekrana dokunun veya <kbd class="px-2 py-1 bg-black/10 rounded font-mono">Boşluk</kbd> / <kbd class="px-2 py-1 bg-black/10 rounded font-mono">→</kbd> tuşuna basın
+    </p>
+  </main>
+
+  <!-- Alt Kontrol Çubuğu (Geri, Karıştır, Değiştir Butonları Aynen Korunuyor) -->
+  <footer class="w-full px-4 sm:px-8 pb-6 pt-2 flex items-center justify-center gap-3 sm:gap-6 z-20">
+    <!-- Geri Butonu -->
+    <button id="prevBtn" class="flex-1 max-w-[130px] sm:max-w-[160px] py-4 sm:py-5 px-4 bg-white/90 hover:bg-white text-slate-800 rounded-3xl font-extrabold text-base sm:text-xl shadow-lg border-2 border-slate-200 active:scale-95 transition-all flex items-center justify-center gap-2">
+      <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
+      </svg>
+      <span>Geri</span>
+    </button>
+
+    <!-- Karıştır Butonu -->
+    <button id="shuffleBtn" class="flex-1 max-w-[170px] sm:max-w-[210px] py-4 sm:py-5 px-4 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-3xl font-extrabold text-base sm:text-xl shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2">
+      <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+      </svg>
+      <span>Karıştır</span>
+    </button>
+
+    <!-- Değiştir / Sonraki Butonu -->
+    <button id="nextBtn" class="flex-2 max-w-[240px] sm:max-w-[300px] w-full py-4 sm:py-5 px-6 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white rounded-3xl font-black text-lg sm:text-2xl shadow-xl active:scale-95 transition-all flex items-center justify-center gap-3">
+      <span>Değiştir</span>
+      <svg xmlns="http://www.w3.org/2000/svg" class="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+      </svg>
+    </button>
+  </footer>
+
+  <!-- DİNAMİK HECE ÜRETİCİ MODALI (SELECT BOXLAR VE KOMBİNASYON ÜRETİCİ) -->
+  <div id="generatorModal" class="fixed inset-0 bg-black/60 backdrop-blur-custom z-50 flex items-center justify-center p-3 sm:p-4 opacity-0 pointer-events-none transition-opacity duration-200">
+    <div class="bg-white rounded-3xl max-w-2xl w-full p-5 sm:p-7 shadow-2xl transform scale-95 transition-transform duration-200 text-slate-800 max-h-[92vh] flex flex-col">
+      
+      <!-- Başlık -->
+      <div class="flex items-center justify-between border-b pb-3 mb-3">
+        <div>
+          <h2 class="text-xl sm:text-2xl font-black text-slate-900 font-display flex items-center gap-2">
+            <span>🔤 Dinamik Hece Üretici</span>
+          </h2>
+          <p class="text-xs sm:text-sm text-slate-500 font-bold mt-0.5">
+            Harfleri seçerek tek tek veya toplu kombinasyonla 2'li, 3'lü ve 4'lü heceler oluşturun.
+          </p>
+        </div>
+        <button id="closeGeneratorBtn" class="p-2 rounded-2xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+
+      <div class="overflow-y-auto pr-1 space-y-4">
+        
+        <!-- Sekmeler: 1. Tekil Hece Oluştur | 2. Toplu Kombinasyon Üret -->
+        <div class="flex bg-slate-100 p-1 rounded-2xl">
+          <button id="tabSingleBtn" type="button" class="flex-1 py-2 rounded-xl font-black text-xs sm:text-sm bg-white text-indigo-600 shadow-sm transition">
+            Seçerek Hece Oluştur (Select Box)
+          </button>
+          <button id="tabMultiBtn" type="button" class="flex-1 py-2 rounded-xl font-bold text-xs sm:text-sm text-slate-600 hover:text-indigo-600 transition">
+            Toplu Kombinasyon Üretici
+          </button>
+        </div>
+
+        <!-- 1. BÖLÜM: SELECT BOXLAR İLE HECE OLUŞTURMA -->
+        <div id="sectionSingle" class="space-y-4">
+          <!-- Hece Uzunluğu Seçimi: 2'li, 3'lü, 4'lü -->
+          <div>
+            <label class="block text-xs font-black uppercase text-slate-500 tracking-wider mb-1.5">Hece Harf Sayısı</label>
+            <div class="grid grid-cols-3 gap-2">
+              <button type="button" onclick="setLetterCount(2)" id="btnCount2" class="count-btn py-2.5 px-3 rounded-xl border-2 font-black text-sm border-indigo-600 bg-indigo-50 text-indigo-700">
+                2 Harfli (ba, el)
+              </button>
+              <button type="button" onclick="setLetterCount(3)" id="btnCount3" class="count-btn py-2.5 px-3 rounded-xl border-2 font-bold text-sm border-slate-200 hover:border-slate-300 text-slate-700">
+                3 Harfli (kal, tek)
+              </button>
+              <button type="button" onclick="setLetterCount(4)" id="btnCount4" class="count-btn py-2.5 px-3 rounded-xl border-2 font-bold text-sm border-slate-200 hover:border-slate-300 text-slate-700">
+                4 Harfli (kurt, park)
+              </button>
+            </div>
+          </div>
+
+          <!-- Select Box'lar Alanı -->
+          <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200">
+            <label class="block text-xs font-black uppercase text-slate-500 tracking-wider mb-2">Harfleri Seçin</label>
+            <div id="selectBoxesContainer" class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+              <!-- JS Dinamik olarak dolduracak -->
+            </div>
+          </div>
+
+          <!-- Üretilen Önizleme ve Ekle Butonu -->
+          <div class="flex items-center justify-between bg-indigo-50/70 border border-indigo-200 rounded-2xl p-3.5">
+            <div>
+              <span class="text-xs font-black text-indigo-500 uppercase tracking-wider block">Oluşturulan Hece</span>
+              <span id="previewSingleSyllable" class="text-3xl font-black text-indigo-900 font-display">el</span>
+            </div>
+            <div class="flex gap-2">
+              <button type="button" id="addSingleBtn" class="px-5 py-3 rounded-xl font-black bg-indigo-600 hover:bg-indigo-700 text-white shadow-md active:scale-95 transition flex items-center gap-1.5 text-sm">
+                <span>➕ Sadece Ekle</span>
+              </button>
+              <button type="button" id="addAndShowSingleBtn" class="px-5 py-3 rounded-xl font-black bg-emerald-600 hover:bg-emerald-700 text-white shadow-md active:scale-95 transition flex items-center gap-1.5 text-sm">
+                <span>⚡ Ekle ve Şimdi Göster</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2. BÖLÜM: TOPLU KOMBİNASYON ÜRETİCİ -->
+        <div id="sectionMulti" class="hidden space-y-4">
+          <div class="p-3 bg-amber-50 rounded-2xl border border-amber-200 text-xs font-bold text-amber-800">
+            💡 Seçtiğiniz sesli ve sessiz harflerin birleşimiyle otomatik hece listesi üretilir.
+          </div>
+
+          <!-- Kombinasyon Tipi -->
+          <div>
+            <label class="block text-xs font-black uppercase text-slate-500 tracking-wider mb-1.5">Kombinasyon Deseni</label>
+            <select id="multiPatternSelect" class="w-full p-2.5 bg-slate-50 border-2 border-slate-200 rounded-xl font-bold text-sm text-slate-700 outline-none focus:border-indigo-600">
+              <option value="cv">2 Harfli: Sessiz + Sesli (ba, ca, de...)</option>
+              <option value="vc">2 Harfli: Sesli + Sessiz (ab, ac, ed...)</option>
+              <option value="both2">2 Harfli: Her İkisi (Açık ve Kapalı Heceler)</option>
+              <option value="cvc">3 Harfli: Sessiz + Sesli + Sessiz (kal, bak, gel...)</option>
+              <option value="cvcc">4 Harfli: Sessiz + Sesli + Sessiz + Sessiz (kurt, mert, park...)</option>
+            </select>
+          </div>
+
+          <!-- Sesli Harf Seçimi -->
+          <div>
+            <label class="block text-xs font-black uppercase text-slate-500 tracking-wider mb-1">Dahil Edilecek Sesli Harfler (Ünlüler)</label>
+            <div id="vowelsCheckboxes" class="flex flex-wrap gap-1.5">
+              <!-- Dinamik dolacak -->
+            </div>
+          </div>
+
+          <!-- Sessiz Harf Seçimi -->
+          <div>
+            <div class="flex items-center justify-between mb-1">
+              <label class="block text-xs font-black uppercase text-slate-500 tracking-wider">Dahil Edilecek Sessiz Harfler (Ünsüzler)</label>
+              <button type="button" id="toggleAllConsonantsBtn" class="text-xs font-bold text-indigo-600 hover:underline">Tümünü Seç / Kaldır</button>
+            </div>
+            <div id="consonantsCheckboxes" class="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto p-1 bg-slate-50 rounded-xl border border-slate-200">
+              <!-- Dinamik dolacak -->
+            </div>
+          </div>
+
+          <!-- Üretilen Toplu Önizleme Sayısı ve Buton -->
+          <div class="flex items-center justify-between pt-2 border-t">
+            <span id="multiCountLabel" class="text-xs sm:text-sm font-extrabold text-slate-600">Tahmini: ~ hece</span>
+            <button type="button" id="generateMultiBtn" class="px-5 py-2.5 rounded-xl font-black bg-amber-500 hover:bg-amber-600 text-white shadow-md active:scale-95 transition text-sm">
+              🚀 Kombinasyonları Havuzuna Ekle
+            </button>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+
+  <!-- HECE HAVUZU DÜZENLEME MODALI (GELİŞMİŞ GRUPLAR İLE) -->
+  <div id="poolModal" class="fixed inset-0 bg-black/60 backdrop-blur-custom z-50 flex items-center justify-center p-3 sm:p-4 opacity-0 pointer-events-none transition-opacity duration-200">
+    <div class="bg-white rounded-3xl max-w-2xl w-full p-5 sm:p-7 shadow-2xl transform scale-95 transition-transform duration-200 text-slate-800 max-h-[92vh] flex flex-col">
+      
+      <div class="flex items-center justify-between border-b pb-3 mb-3">
+        <div>
+          <h2 class="text-xl sm:text-2xl font-black text-slate-900 font-display">Hece Havuzunu Düzenle</h2>
+          <p class="text-xs sm:text-sm text-slate-500 font-bold mt-0.5">
+            Heceleri virgül, boşluk veya yeni satır ile ayırarak düzenleyebilirsiniz.
+          </p>
+        </div>
+        <button id="closeModalBtn" class="p-2 rounded-2xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+
+      <div class="overflow-y-auto space-y-3 pr-1">
+        <!-- Metin Alanı -->
+        <div>
+          <textarea id="syllablesInput" rows="6" class="w-full p-3.5 border-2 border-slate-200 focus:border-indigo-600 rounded-2xl outline-none font-bold text-base sm:text-lg text-slate-700 resize-none font-display leading-relaxed" placeholder="el, le, al, la, ak, kal, kurt..."></textarea>
+        </div>
+
+        <!-- Maarif Modeli & Zengin Hazır Ses Grupları -->
+        <div>
+          <span class="text-xs font-black uppercase text-slate-400 tracking-wider block mb-1.5">Türkiye Yüzyılı Maarif Modeli ve Hazır Gruplar:</span>
+          <div class="flex flex-wrap gap-1.5">
+            <button type="button" onclick="loadPreset('maarif1')" class="text-xs font-black px-2.5 py-1.5 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 rounded-xl transition">1. Grup (A-N-E-T-İ-L)</button>
+            <button type="button" onclick="loadPreset('maarif2')" class="text-xs font-black px-2.5 py-1.5 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 rounded-xl transition">2. Grup (O-R-U-K-I-M)</button>
+            <button type="button" onclick="loadPreset('maarif3')" class="text-xs font-black px-2.5 py-1.5 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 rounded-xl transition">3. Grup (B-Ü-S-Ş-D-Y)</button>
+            <button type="button" onclick="loadPreset('maarif4')" class="text-xs font-black px-2.5 py-1.5 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 rounded-xl transition">4. Grup (C-Ç-P-G-Z-H)</button>
+            <button type="button" onclick="loadPreset('maarif5')" class="text-xs font-black px-2.5 py-1.5 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 rounded-xl transition">5. Grup (F-V-J-Ğ)</button>
+          </div>
+        </div>
+
+        <!-- Harf Sayısına Göre Hazır Listeler -->
+        <div>
+          <span class="text-xs font-black uppercase text-slate-400 tracking-wider block mb-1.5">Harf Uzunluğuna Göre Hazır Listeler:</span>
+          <div class="flex flex-wrap gap-1.5">
+            <button type="button" onclick="loadPreset('2harfli')" class="text-xs font-black px-2.5 py-1.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-xl transition">2 Harfliler (Açık/Kapalı)</button>
+            <button type="button" onclick="loadPreset('3harfli')" class="text-xs font-black px-2.5 py-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-xl transition">3 Harfliler (kal, bak, gel...)</button>
+            <button type="button" onclick="loadPreset('4harfli')" class="text-xs font-black px-2.5 py-1.5 bg-amber-50 text-amber-700 hover:bg-amber-100 rounded-xl transition">4 Harfliler (kurt, mert, park...)</button>
+            <button type="button" onclick="loadPreset('karma')" class="text-xs font-black px-2.5 py-1.5 bg-purple-50 text-purple-700 hover:bg-purple-100 rounded-xl transition">Zengin Karma Havuz (Tümü)</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Modal Alt Butonları -->
+      <div class="flex items-center justify-between pt-3 border-t mt-3">
+        <button type="button" id="clearPoolBtn" class="text-xs font-bold text-red-500 hover:text-red-700 transition">
+          Temizle
+        </button>
+        <div class="flex items-center gap-2">
+          <button id="cancelModalBtn" class="px-4 py-2.5 rounded-2xl font-extrabold text-slate-600 hover:bg-slate-100 transition text-sm">
+            Vazgeç
+          </button>
+          <button id="savePoolBtn" class="px-5 py-2.5 rounded-2xl font-black bg-indigo-600 hover:bg-indigo-700 text-white shadow-md active:scale-95 transition text-sm">
+            Kaydet ve Karıştır
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    // Alfabe Harfleri
+    const TURKISH_VOWELS = ["a", "e", "ı", "i", "o", "ö", "u", "ü"];
+    const TURKISH_CONSONANTS = ["b", "c", "ç", "d", "f", "g", "ğ", "h", "j", "k", "l", "m", "n", "p", "r", "s", "ş", "t", "v", "y", "z"];
+    const TURKISH_ALL_LETTERS = ["a", "b", "c", "ç", "d", "e", "f", "g", "ğ", "h", "ı", "i", "j", "k", "l", "m", "n", "o", "ö", "p", "r", "s", "ş", "t", "u", "ü", "v", "y", "z"];
+
+    // Hazır Şablonlar (Genişletilmiş Maarif ve Uzunluk Kümeleri)
+    const PRESETS = {
+      // Maarif Modeli Ses Grupları
+      'maarif1': [
+        "an", "na", "en", "ne", "in", "ni", "at", "ta", "et", "te", "it", "ti",
+        "al", "la", "el", "le", "il", "li", "tan", "ten", "tin", "nal", "tel", "tat", "net"
+      ],
+      'maarif2': [
+        "ok", "ko", "or", "ro", "om", "mo", "uk", "ku", "ur", "ru", "um", "mu",
+        "ık", "kı", "ır", "rı", "ım", "mı", "kol", "kor", "kum", "mor", "kök", "kurt"
+      ],
+      'maarif3': [
+        "ba", "ab", "be", "eb", "bo", "bu", "bı", "bi", "sa", "as", "se", "es", "so", "su",
+        "şa", "aş", "şe", "eş", "şu", "da", "ad", "de", "ed", "ya", "ay", "ye", "ey", "yo", "oy",
+        "bak", "ben", "son", "düş", "yol", "baş", "yaş"
+      ],
+      'maarif4': [
+        "ca", "ce", "ci", "co", "cu", "ça", "aç", "çe", "eç", "çi", "pa", "ap", "pe", "ep",
+        "ga", "ge", "za", "az", "ze", "ez", "ha", "ah", "he", "eh", "cam", "çay", "park", "göz", "hız"
+      ],
+      'maarif5': [
+        "fa", "fe", "fi", "fo", "fu", "va", "av", "ve", "ev", "vi", "vo", "ja", "je", "ağ", "eğ", "iğ", "oğ", "far", "fil", "van", "ağaç"
+      ],
+      // Harf Sayısına Göre
+      '2harfli': [
+        "an", "na", "en", "ne", "in", "ni", "on", "no", "un", "nu",
+        "el", "le", "al", "la", "il", "li", "ol", "lo", "ul", "lu",
+        "at", "ta", "et", "te", "it", "ti", "ot", "to", "ut", "tu",
+        "ak", "ka", "ek", "ke", "ik", "ki", "ok", "ko", "uk", "ku",
+        "ba", "ab", "be", "eb", "bi", "ib", "bo", "ob", "bu", "ub",
+        "ma", "am", "me", "em", "mi", "im", "mo", "om", "mu", "um",
+        "sa", "as", "se", "es", "si", "is", "so", "os", "su", "us",
+        "da", "ad", "de", "ed", "di", "id", "do", "od", "du", "ud",
+        "ya", "ay", "ye", "ey", "yo", "oy", "yu", "uy"
+      ],
+      '3harfli': [
+        "kal", "kel", "kol", "kul", "bak", "bek", "bık", "bok", "buz",
+        "gel", "göl", "gül", "git", "koş", "kaş", "kış", "kuş", "ver",
+        "var", "vur", "yol", "yaz", "yüz", "tut", "tat", "tek", "tok",
+        "ben", "sen", "biz", "siz", "bal", "bel", "bol", "çam", "çim",
+        "mor", "nar", "tam", "taş", "diş", "düş", "göz", "söz", "köz"
+      ],
+      '4harfli': [
+        "kurt", "yurt", "türk", "park", "mert", "sert", "dört", "kars",
+        "kart", "mart", "bard", "kent", "renk", "tank", "tost", "dost",
+        "post", "film", "harç", "borç", "çark", "şart", "fark", "disk"
+      ],
+      'karma': [
+        "el", "le", "al", "la", "ak", "ka", "ek", "ke", "at", "ta", "et", "te",
+        "an", "na", "en", "ne", "kal", "bak", "gel", "ver", "yol", "koş", "tut",
+        "mor", "bal", "ben", "sen", "kurt", "yurt", "türk", "park", "mert", "sert", "dört"
+      ]
+    };
+
+    // State
+    let pool = [];
+    let currentIndex = 0;
+    let autoplayInterval = null;
+    let autoplaySeconds = 2;
+
+    // Hece Üretici State
+    let currentSelectedLetterCount = 2; // 2, 3 veya 4
+    let singleSelectLetters = ["e", "l", "k", "t"]; // aktif seçili harfler
+
+    // DOM Öğeleri
+    const heceCard = document.getElementById('heceCard');
+    const counterText = document.getElementById('counterText');
+    const nextBtn = document.getElementById('nextBtn');
+    const prevBtn = document.getElementById('prevBtn');
+    const shuffleBtn = document.getElementById('shuffleBtn');
+    const slideArea = document.getElementById('slideArea');
+    const toastMessage = document.getElementById('toastMessage');
+    const toastText = document.getElementById('toastText');
+
+    // Modallar
+    const poolModal = document.getElementById('poolModal');
+    const openModalBtn = document.getElementById('openModalBtn');
+    const closeModalBtn = document.getElementById('closeModalBtn');
+    const cancelModalBtn = document.getElementById('cancelModalBtn');
+    const savePoolBtn = document.getElementById('savePoolBtn');
+    const clearPoolBtn = document.getElementById('clearPoolBtn');
+    const syllablesInput = document.getElementById('syllablesInput');
+
+    const generatorModal = document.getElementById('generatorModal');
+    const openGeneratorBtn = document.getElementById('openGeneratorBtn');
+    const closeGeneratorBtn = document.getElementById('closeGeneratorBtn');
+    const tabSingleBtn = document.getElementById('tabSingleBtn');
+    const tabMultiBtn = document.getElementById('tabMultiBtn');
+    const sectionSingle = document.getElementById('sectionSingle');
+    const sectionMulti = document.getElementById('sectionMulti');
+
+    // Select Box & Hece Oluşturma Öğeleri
+    const selectBoxesContainer = document.getElementById('selectBoxesContainer');
+    const previewSingleSyllable = document.getElementById('previewSingleSyllable');
+    const addSingleBtn = document.getElementById('addSingleBtn');
+    const addAndShowSingleBtn = document.getElementById('addAndShowSingleBtn');
+
+    // Çoklu Kombinasyon Öğeleri
+    const vowelsCheckboxes = document.getElementById('vowelsCheckboxes');
+    const consonantsCheckboxes = document.getElementById('consonantsCheckboxes');
+    const toggleAllConsonantsBtn = document.getElementById('toggleAllConsonantsBtn');
+    const multiPatternSelect = document.getElementById('multiPatternSelect');
+    const multiCountLabel = document.getElementById('multiCountLabel');
+    const generateMultiBtn = document.getElementById('generateMultiBtn');
+
+    // Tema & Tam Ekran
+    const themes = ['theme-pastel', 'theme-sky', 'theme-chalkboard', 'theme-night'];
+    let currentThemeIndex = 0;
+    const themeToggleBtn = document.getElementById('themeToggleBtn');
+    const fullscreenBtn = document.getElementById('fullscreenBtn');
+    const enterFullscreenIcon = document.getElementById('enterFullscreenIcon');
+    const exitFullscreenIcon = document.getElementById('exitFullscreenIcon');
+
+    // Otomatik Oynatma
+    const autoplayBtn = document.getElementById('autoplayBtn');
+    const playIcon = document.getElementById('playIcon');
+    const pauseIcon = document.getElementById('pauseIcon');
+    const autoplayBadge = document.getElementById('autoplayBadge');
+
+    function shuffleArray(array) {
+      const arr = [...array];
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+      return arr;
+    }
+
+    function savePoolToStorage(list) {
+      try {
+        localStorage.setItem('hece_havuzu_v2', JSON.stringify(list));
+      } catch (e) {
+        console.error("Depolama hatası:", e);
+      }
+    }
+
+    function loadSavedPool() {
+      try {
+        const saved = localStorage.getItem('hece_havuzu_v2');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return parsed;
+          }
+        }
+      } catch (e) {
+        console.error("Yükleme hatası:", e);
+      }
+      return [...PRESETS['maarif1']];
+    }
+
+    function updateDisplay(animate = true) {
+      if (!pool || pool.length === 0) {
+        heceCard.textContent = "—";
+        counterText.textContent = "0 / 0";
+        return;
+      }
+
+      heceCard.textContent = pool[currentIndex];
+      counterText.textContent = `${currentIndex + 1} / ${pool.length}`;
+
+      if (animate) {
+        heceCard.classList.remove('pop-in');
+        void heceCard.offsetWidth;
+        heceCard.classList.add('pop-in');
+      }
+    }
+
+    function nextSyllable() {
+      if (pool.length === 0) return;
+      if (currentIndex < pool.length - 1) {
+        currentIndex++;
+      } else {
+        currentIndex = 0;
+        showToast("Başa dönüldü 🔄");
+      }
+      updateDisplay(true);
+    }
+
+    function prevSyllable() {
+      if (pool.length === 0) return;
+      if (currentIndex > 0) {
+        currentIndex--;
+      } else {
+        currentIndex = pool.length - 1;
+      }
+      updateDisplay(true);
+    }
+
+    function triggerShuffle() {
+      if (pool.length === 0) return;
+      pool = shuffleArray(pool);
+      currentIndex = 0;
+      updateDisplay(true);
+      showToast("Tüm Slaytlar Karıştırıldı! 🎲");
+    }
+
+    let toastTimer;
+    function showToast(text) {
+      clearTimeout(toastTimer);
+      toastText.textContent = text;
+      toastMessage.classList.remove('opacity-0', '-translate-y-2');
+      toastMessage.classList.add('opacity-100', 'translate-y-0');
+      toastTimer = setTimeout(() => {
+        toastMessage.classList.remove('opacity-100', 'translate-y-0');
+        toastMessage.classList.add('opacity-0', '-translate-y-2');
+      }, 1600);
+    }
+
+    // Harf sayısı seçimi (2, 3 veya 4)
+    window.setLetterCount = function(count) {
+      currentSelectedLetterCount = count;
+      [2, 3, 4].forEach(c => {
+        const btn = document.getElementById(`btnCount${c}`);
+        if (c === count) {
+          btn.className = "count-btn py-2.5 px-3 rounded-xl border-2 font-black text-sm border-indigo-600 bg-indigo-50 text-indigo-700";
+        } else {
+          btn.className = "count-btn py-2.5 px-3 rounded-xl border-2 font-bold text-sm border-slate-200 hover:border-slate-300 text-slate-700";
+        }
+      });
+      renderSelectBoxes();
+      updatePreviewFromSelects();
+    };
+
+    // Dinamik Select Box'ları oluştur
+    function renderSelectBoxes() {
+      selectBoxesContainer.innerHTML = "";
+      selectBoxesContainer.className = `grid grid-cols-${Math.min(currentSelectedLetterCount, 4)} gap-2.5`;
+
+      const labels = ["1. Harf", "2. Harf", "3. Harf", "4. Harf"];
+
+      for (let i = 0; i < currentSelectedLetterCount; i++) {
+        const wrap = document.createElement("div");
+        wrap.className = "flex flex-col gap-1";
+
+        const label = document.createElement("span");
+        label.className = "text-[11px] font-black text-slate-500 uppercase";
+        label.textContent = labels[i];
+
+        const select = document.createElement("select");
+        select.id = `selectLetter_${i}`;
+        select.className = "p-2.5 bg-white border-2 border-slate-200 rounded-xl font-black text-lg text-slate-800 outline-none focus:border-indigo-600 cursor-pointer shadow-sm";
+
+        // Türkçe harfleri ekle
+        TURKISH_ALL_LETTERS.forEach(char => {
+          const opt = document.createElement("option");
+          opt.value = char;
+          opt.textContent = `${char.toUpperCase()} (${char})`;
+          select.appendChild(opt);
+        });
+
+        // Varsayılan mantıklı başlangıç harfleri
+        if (singleSelectLetters[i]) {
+          select.value = singleSelectLetters[i];
+        } else {
+          select.value = (i === 1) ? "a" : (i === 0 ? "k" : "l");
+        }
+
+        select.addEventListener('change', () => {
+          singleSelectLetters[i] = select.value;
+          updatePreviewFromSelects();
+        });
+
+        wrap.appendChild(label);
+        wrap.appendChild(select);
+        selectBoxesContainer.appendChild(wrap);
+      }
+    }
+
+    // Seçilen harflerden anlık hece metnini güncelle
+    function updatePreviewFromSelects() {
+      let formed = "";
+      for (let i = 0; i < currentSelectedLetterCount; i++) {
+        const sel = document.getElementById(`selectLetter_${i}`);
+        if (sel) {
+          formed += sel.value;
+        }
+      }
+      previewSingleSyllable.textContent = formed || "—";
+      return formed;
+    }
+
+    // Tek heceyi havuza ekle
+    function addSingleSyllable(andShowNow = false) {
+      const syllable = updatePreviewFromSelects().trim().toLocaleLowerCase('tr-TR');
+      if (!syllable) return;
+
+      if (!pool.includes(syllable)) {
+        pool.push(syllable);
+        savePoolToStorage(pool);
+      }
+
+      if (andShowNow) {
+        currentIndex = pool.indexOf(syllable);
+        updateDisplay(true);
+        closeGeneratorModal();
+        showToast(`"${syllable}" gösteriliyor! ⭐`);
+      } else {
+        updateDisplay(false);
+        showToast(`"${syllable}" havuza eklendi! (Toplam: ${pool.length}) ✅`);
+      }
+    }
+
+    function initCheckboxesForMulti() {
+      // Sesliler
+      vowelsCheckboxes.innerHTML = "";
+      TURKISH_VOWELS.forEach(v => {
+        const label = document.createElement("label");
+        label.className = "flex items-center gap-1 bg-white px-2.5 py-1 rounded-lg border border-slate-200 cursor-pointer hover:bg-indigo-50 font-bold text-xs select-none";
+        label.innerHTML = `
+          <input type="checkbox" value="${v}" checked class="vowel-chk rounded text-indigo-600 focus:ring-0">
+          <span>${v.toUpperCase()}</span>
+        `;
+        label.querySelector('input').addEventListener('change', updateMultiCountEstimate);
+        vowelsCheckboxes.appendChild(label);
+      });
+
+      // Sessizler (Varsayılan olarak en sık kullanılanlar seçili gelsin)
+      consonantsCheckboxes.innerHTML = "";
+      const defaultActiveConsonants = ["l", "k", "t", "m", "n", "r", "b", "s", "d", "y"];
+      TURKISH_CONSONANTS.forEach(c => {
+        const isChecked = defaultActiveConsonants.includes(c);
+        const label = document.createElement("label");
+        label.className = "flex items-center gap-1 bg-white px-2 py-1 rounded-lg border border-slate-200 cursor-pointer hover:bg-indigo-50 font-bold text-xs select-none";
+        label.innerHTML = `
+          <input type="checkbox" value="${c}" ${isChecked ? 'checked' : ''} class="consonant-chk rounded text-indigo-600 focus:ring-0">
+          <span>${c.toUpperCase()}</span>
+        `;
+        label.querySelector('input').addEventListener('change', updateMultiCountEstimate);
+        consonantsCheckboxes.appendChild(label);
+      });
+
+      updateMultiCountEstimate();
+    }
+
+    function getSelectedVowels() {
+      return Array.from(document.querySelectorAll('.vowel-chk:checked')).map(cb => cb.value);
+    }
+    function getSelectedConsonants() {
+      return Array.from(document.querySelectorAll('.consonant-chk:checked')).map(cb => cb.value);
+    }
+
+    function updateMultiCountEstimate() {
+      const v = getSelectedVowels().length;
+      const c = getSelectedConsonants().length;
+      const pattern = multiPatternSelect.value;
+      let count = 0;
+
+      if (pattern === 'cv' || pattern === 'vc') count = v * c;
+      else if (pattern === 'both2') count = 2 * (v * c);
+      else if (pattern === 'cvc') count = c * v * c;
+      else if (pattern === 'cvcc') count = c * v * c * c;
+
+      multiCountLabel.textContent = `Tahmini Üretilecek: ${count} hece`;
+    }
+
+    // Toplu Kombinasyon Üretip Havuza Ekleme
+    function generateMultiSyllables() {
+      const vowels = getSelectedVowels();
+      const consonants = getSelectedConsonants();
+      const pattern = multiPatternSelect.value;
+
+      if (vowels.length === 0 || consonants.length === 0) {
+        showToast("Lütfen en az bir sesli ve bir sessiz harf seçin!");
+        return;
+      }
+
+      const generated = [];
+
+      if (pattern === 'cv') {
+        consonants.forEach(c => vowels.forEach(v => generated.push(c + v)));
+      } else if (pattern === 'vc') {
+        vowels.forEach(v => consonants.forEach(c => generated.push(v + c)));
+      } else if (pattern === 'both2') {
+        consonants.forEach(c => vowels.forEach(v => generated.push(c + v)));
+        vowels.forEach(v => consonants.forEach(c => generated.push(v + c)));
+      } else if (pattern === 'cvc') {
+        // Sessiz + Sesli + Sessiz (okunabilirliği artırmak için her kombinasyondan)
+        consonants.forEach(c1 => {
+          vowels.forEach(v => {
+            consonants.forEach(c2 => {
+              generated.push(c1 + v + c2);
+            });
+          });
+        });
+      } else if (pattern === 'cvcc') {
+        // 4 Harfli Sessiz + Sesli + Sessiz + Sessiz
+        // Çok aşırı şişmemesi için seçili sessizlerden dengeli alt küme
+        consonants.slice(0, 4).forEach(c1 => {
+          vowels.forEach(v => {
+            ["r", "l", "n", "s"].filter(x => consonants.includes(x)).forEach(c2 => {
+              ["t", "k", "p", "ç"].filter(x => consonants.includes(x)).forEach(c3 => {
+                generated.push(c1 + v + c2 + c3);
+              });
+            });
+          });
+        });
+      }
+
+      // Havuzla birleştir (tekrarları önle)
+      const uniqueNew = generated.filter(item => !pool.includes(item));
+      if (uniqueNew.length === 0) {
+        showToast("Üretilen tüm heceler zaten havuzunuzda mevcut!");
+        return;
+      }
+
+      pool = pool.concat(uniqueNew);
+      savePoolToStorage(pool);
+      updateDisplay(false);
+      closeGeneratorModal();
+      showToast(`${uniqueNew.length} yeni hece havuza eklendi! 🚀`);
+    }
+
+    // Sekme Değişimi
+    tabSingleBtn.addEventListener('click', () => {
+      tabSingleBtn.className = "flex-1 py-2 rounded-xl font-black text-xs sm:text-sm bg-white text-indigo-600 shadow-sm transition";
+      tabMultiBtn.className = "flex-1 py-2 rounded-xl font-bold text-xs sm:text-sm text-slate-600 hover:text-indigo-600 transition";
+      sectionSingle.classList.remove('hidden');
+      sectionMulti.classList.add('hidden');
+    });
+
+    tabMultiBtn.addEventListener('click', () => {
+      tabMultiBtn.className = "flex-1 py-2 rounded-xl font-black text-xs sm:text-sm bg-white text-indigo-600 shadow-sm transition";
+      tabSingleBtn.className = "flex-1 py-2 rounded-xl font-bold text-xs sm:text-sm text-slate-600 hover:text-indigo-600 transition";
+      sectionMulti.classList.remove('hidden');
+      sectionSingle.classList.add('hidden');
+      updateMultiCountEstimate();
+    });
+
+    // Hece Üretici Modalını Aç / Kapat
+    function openGeneratorModal() {
+      renderSelectBoxes();
+      updatePreviewFromSelects();
+      generatorModal.classList.remove('opacity-0', 'pointer-events-none');
+      generatorModal.querySelector('.transform').classList.remove('scale-95');
+      generatorModal.querySelector('.transform').classList.add('scale-100');
+    }
+
+    function closeGeneratorModal() {
+      generatorModal.classList.add('opacity-0', 'pointer-events-none');
+      generatorModal.querySelector('.transform').classList.add('scale-95');
+      generatorModal.querySelector('.transform').classList.remove('scale-100');
+    }
+
+    // Düzenleme Modalı
+    function openPoolModal() {
+      syllablesInput.value = pool.join(', ');
+      poolModal.classList.remove('opacity-0', 'pointer-events-none');
+      poolModal.querySelector('.transform').classList.remove('scale-95');
+      poolModal.querySelector('.transform').classList.add('scale-100');
+    }
+
+    function closePoolModal() {
+      poolModal.classList.add('opacity-0', 'pointer-events-none');
+      poolModal.querySelector('.transform').classList.add('scale-95');
+      poolModal.querySelector('.transform').classList.remove('scale-100');
+    }
+
+    // Şablon yükleme
+    window.loadPreset = function(presetKey) {
+      if (PRESETS[presetKey]) {
+        syllablesInput.value = PRESETS[presetKey].join(', ');
+        showToast("Grup listesi yüklendi. 'Kaydet ve Karıştır'a basabilirsiniz.");
+      }
+    };
+
+    // Havuzu Kaydet
+    function savePoolFromInput() {
+      const rawText = syllablesInput.value;
+      const items = rawText
+        .split(/[\s,;\n\r]+/)
+        .map(s => s.trim().toLocaleLowerCase('tr-TR'))
+        .filter(s => s.length > 0);
+
+      if (items.length === 0) {
+        showToast("Lütfen en az bir hece girin!");
+        return;
+      }
+
+      savePoolToStorage(items);
+      pool = shuffleArray(items);
+      currentIndex = 0;
+      updateDisplay(true);
+      closePoolModal();
+      showToast(`${pool.length} hece kaydedildi ve karıştırıldı! 🎲`);
+    }
+
+    function cycleTheme() {
+      document.body.classList.remove(themes[currentThemeIndex]);
+      currentThemeIndex = (currentThemeIndex + 1) % themes.length;
+      document.body.classList.add(themes[currentThemeIndex]);
+    }
+
+    function toggleFullScreen() {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().then(() => {
+          enterFullscreenIcon.classList.add('hidden');
+          exitFullscreenIcon.classList.remove('hidden');
+        }).catch(e => console.warn(e));
+      } else {
+        if (document.exitFullscreen) {
+          document.exitFullscreen().then(() => {
+            enterFullscreenIcon.classList.remove('hidden');
+            exitFullscreenIcon.classList.add('hidden');
+          });
+        }
+      }
+    }
+
+    document.addEventListener('fullscreenchange', () => {
+      if (!document.fullscreenElement) {
+        enterFullscreenIcon.classList.remove('hidden');
+        exitFullscreenIcon.classList.add('hidden');
+      } else {
+        enterFullscreenIcon.classList.add('hidden');
+        exitFullscreenIcon.classList.remove('hidden');
+      }
+    });
+
+    function toggleAutoplay() {
+      if (autoplayInterval) {
+        clearInterval(autoplayInterval);
+        autoplayInterval = null;
+        playIcon.classList.remove('hidden');
+        pauseIcon.classList.add('hidden');
+        autoplayBadge.classList.add('hidden');
+        autoplayBadge.classList.remove('flex');
+        showToast("Otomatik Geçiş Durduruldu ⏸️");
+      } else {
+        autoplayInterval = setInterval(nextSyllable, autoplaySeconds * 1000);
+        playIcon.classList.add('hidden');
+        pauseIcon.classList.remove('hidden');
+        autoplayBadge.classList.remove('hidden');
+        autoplayBadge.classList.add('flex');
+        showToast("Otomatik Geçiş Başladı ▶️");
+      }
+    }
+
+    // Dinleyiciler
+    nextBtn.addEventListener('click', (e) => { e.stopPropagation(); nextSyllable(); });
+    prevBtn.addEventListener('click', (e) => { e.stopPropagation(); prevSyllable(); });
+    shuffleBtn.addEventListener('click', (e) => { e.stopPropagation(); triggerShuffle(); });
+    slideArea.addEventListener('click', nextSyllable);
+
+    themeToggleBtn.addEventListener('click', (e) => { e.stopPropagation(); cycleTheme(); });
+    fullscreenBtn.addEventListener('click', (e) => { e.stopPropagation(); toggleFullScreen(); });
+    autoplayBtn.addEventListener('click', (e) => { e.stopPropagation(); toggleAutoplay(); });
+
+    openModalBtn.addEventListener('click', (e) => { e.stopPropagation(); openPoolModal(); });
+    closeModalBtn.addEventListener('click', closePoolModal);
+    cancelModalBtn.addEventListener('click', closePoolModal);
+    savePoolBtn.addEventListener('click', savePoolFromInput);
+    clearPoolBtn.addEventListener('click', () => { syllablesInput.value = ""; syllablesInput.focus(); });
+
+    openGeneratorBtn.addEventListener('click', (e) => { e.stopPropagation(); openGeneratorModal(); });
+    closeGeneratorBtn.addEventListener('click', closeGeneratorModal);
+    addSingleBtn.addEventListener('click', () => addSingleSyllable(false));
+    addAndShowSingleBtn.addEventListener('click', () => addSingleSyllable(true));
+
+    multiPatternSelect.addEventListener('change', updateMultiCountEstimate);
+    generateMultiBtn.addEventListener('click', generateMultiSyllables);
+
+    let allConsonantsSelected = true;
+    toggleAllConsonantsBtn.addEventListener('click', () => {
+      allConsonantsSelected = !allConsonantsSelected;
+      document.querySelectorAll('.consonant-chk').forEach(cb => cb.checked = allConsonantsSelected);
+      updateMultiCountEstimate();
+    });
+
+    poolModal.addEventListener('click', (e) => { if (e.target === poolModal) closePoolModal(); });
+    generatorModal.addEventListener('click', (e) => { if (e.target === generatorModal) closeGeneratorModal(); });
+
+    // Klavye Tuş Kontrolleri
+    window.addEventListener('keydown', (e) => {
+      // Herhangi bir modal açıksa slayt kısayollarını kilitle
+      const isModalOpen = !poolModal.classList.contains('pointer-events-none') || 
+                          !generatorModal.classList.contains('pointer-events-none');
+      if (isModalOpen) {
+        if (e.key === 'Escape') {
+          closePoolModal();
+          closeGeneratorModal();
+        }
+        return;
+      }
+
+      switch (e.key) {
+        case ' ':
+        case 'ArrowRight':
+        case 'ArrowDown':
+        case 'Enter':
+          e.preventDefault();
+          nextSyllable();
+          break;
+        case 'ArrowLeft':
+        case 'ArrowUp':
+        case 'Backspace':
+          e.preventDefault();
+          prevSyllable();
+          break;
+        case 'r':
+        case 'R':
+          e.preventDefault();
+          triggerShuffle();
+          break;
+        case 'f':
+        case 'F':
+          e.preventDefault();
+          toggleFullScreen();
+          break;
+      }
+    });
+
+    // İlk Çalıştırma
+    window.onload = function() {
+      const initialPool = loadSavedPool();
+      pool = shuffleArray(initialPool);
+      currentIndex = 0;
+      updateDisplay(false);
+      renderSelectBoxes();
+      initCheckboxesForMulti();
+    };
+  </script>
+</body>
+</html>
